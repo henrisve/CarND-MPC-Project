@@ -100,7 +100,7 @@ int main() {
           */
           for(int i = 0; i < ptsx.size(); i++){
               double shift_x = ptsx[i]-px;
-              double shift_y = ptsx[i]-py;
+              double shift_y = ptsy[i]-py;
               
               ptsx[i] = (shift_x*cos(0-psi)-shift_y*sin(0-psi));
               ptsy[i] = (shift_x*sin(0-psi)+shift_y*cos(0-psi));
@@ -118,7 +118,7 @@ int main() {
           double epsi = -atan(coeffs[1]);
 
           double steer_value = j[1]["steering_angle"];
-          double throttle_value = j[1]["throttle"];
+          double throttle_value = j[1]["throttle"];// almost accelration
 
           Eigen::VectorXd state(6);
           state << 0,0,0,v,cte,epsi;
@@ -186,7 +186,7 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          this_thread::sleep_for(chrono::milliseconds(100));
+          this_thread::sleep_for(chrono::milliseconds(0));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
