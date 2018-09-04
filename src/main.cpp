@@ -98,6 +98,7 @@ int main() {
           * Both are in between [-1, 1].
           * From the QA video:
           */
+         //Change the coordinate system of the map to that of the car
           for(int i = 0; i < ptsx.size(); i++){
               double shift_x = ptsx[i]-px;
               double shift_y = ptsy[i]-py;
@@ -121,7 +122,11 @@ int main() {
           double throttle_value = j[1]["throttle"];// almost accelration
 
           Eigen::VectorXd state(6);
-          state << 0,0,0,v,cte,epsi;
+
+          double x = 0;//v*0.1*cos(steer_value);
+          double y = 0;//v*0.1*sin(steer_value);
+          double psi2 = 0;//-steer_value*0.1;
+          state << x,y,psi2,v,cte,epsi;
 
           // calculate steering angle and throttle
           auto vars = mpc.Solve(state,coeffs);
@@ -186,7 +191,7 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          this_thread::sleep_for(chrono::milliseconds(0));
+          this_thread::sleep_for(chrono::milliseconds(100));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
