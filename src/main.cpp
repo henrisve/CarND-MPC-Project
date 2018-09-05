@@ -12,6 +12,9 @@
 // for convenience
 using json = nlohmann::json;
 
+//set this to add a latency in the system
+double latency_s = 0.1;
+
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
@@ -70,8 +73,9 @@ int main() {
 
   // MPC is initialized here!
   MPC mpc;
+  double old_v=0;
 
-  h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&mpc, &old_v](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -91,6 +95,7 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          double Lf=2.67;
 
           /*
           * TODO: Calculate steering angle and throttle using MPC.
@@ -103,8 +108,8 @@ int main() {
               double shift_x = ptsx[i]-px;
               double shift_y = ptsy[i]-py;
               
-              ptsx[i] = (shift_x*cos(0-psi)-shift_y*sin(0-psi));
-              ptsy[i] = (shift_x*sin(0-psi)+shift_y*cos(0-psi));
+              ptsx[i] = (shift_x*cos(-psi)-shift_y*sin(-psi));
+              ptsy[i] = (shift_x*sin(-psi)+shift_y*cos(-psi));
           }
 
           double* ptrx = &ptsx[0];
@@ -122,11 +127,18 @@ int main() {
           double throttle_value = j[1]["throttle"];// almost accelration
 
           Eigen::VectorXd state(6);
-
-          double x = 0;//v*0.1*cos(steer_value);
-          double y = 0;//v*0.1*sin(steer_value);
-          double psi2 = 0;//-steer_value*0.1;
-          state << x,y,psi2,v,cte,epsi;
+          double accelration=((v-old_v)+throttle_value*latency_s)/2;
+         
+          double v_latency = v+accelration; 
+          cout << accelration << " = " << (v-old_v) << " + " << throttle_value*latency_s << " /2" <<endl;
+          old_v=v;
+          double psi_latency = ((v_latency)/Lf)* -steer_value * (latency_s); //change in psi
+          double x_latency = ((v_latency+v)/2)*cos(psi_latency/2) * (latency_s); //
+          double y_latency = ((v_latency+v)/2)*sin(psi_latency/2) * (latency_s); //
+          double cte_latency = cte + ((v_latency+v)/2) * sin(psi_latency/2)*(latency_s);
+          double epsi_latncy = epsi + ((v_latency)/Lf)* -steer_value * (latency_s);
+          state << x_latency, y_latency, psi_latency, 
+                    v_latency, cte_latency, epsi;
 
           // calculate steering angle and throttle
           auto vars = mpc.Solve(state,coeffs);
@@ -139,8 +151,7 @@ int main() {
        //   vector<double> mpc_x_vals;
         //  vector<double> mpc_y_vals;
 
-          double Lf=2.67;
-
+          
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
@@ -181,7 +192,7 @@ int main() {
 
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //std::cout << msg << std::endl;
           // Latency
           // The purpose is to mimic real driving conditions where
           // the car does actuate the commands instantly.
@@ -191,7 +202,7 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          this_thread::sleep_for(chrono::milliseconds(100));
+          this_thread::sleep_for(chrono::milliseconds(int(latency_s*1000)));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
