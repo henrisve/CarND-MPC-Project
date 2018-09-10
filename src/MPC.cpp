@@ -5,8 +5,7 @@
 
 using CppAD::AD;
 
-// TODO: Set the timestep length and duration
-size_t N = 10;
+size_t N = 10; //TODO: is it possible to move these into mpc-params?
 double dt = 0.1;
 
 // This value assumes the model presented in the classroom is used.
@@ -23,7 +22,38 @@ const double Lf = 2.67;
 
 double ref_cte = 0;
 double ref_epsi = 0;
-double ref_v = 100;
+//double ref_v = 100;  
+
+/* MPC params is as follow
+  * 0 ref_v
+  * 1 cte error
+  * 2 epsi error
+  * 3 speed error
+  * 4 delta  ??
+  * 5 acceleration
+  * 6 delta diff
+  * 7 acceleration diff
+  */
+std::vector<double> mpc_params ={
+  104.95, //ref_v
+  1581, //cte error
+  2068.48, //epsi error
+  1, //speed error
+  5.9, //delta  ??
+  5, //acceleration
+  218, //delta diff
+  9.56953};  //acceleration diff
+
+std::vector<double> twiddleDP = {
+  0.5, //ref_v
+  10, //cte error
+  10, //epsi error
+  0.01, //speed error
+  0.05, //delta  ??
+  0.05, //acceleration
+  1, //delta diff
+  0.05};  //acceleration diff
+
 
 double x_start = 0;
 double y_start = x_start + N;
@@ -43,29 +73,24 @@ class FG_eval {
 
   typedef CPPAD_TESTVECTOR(AD<double>) ADvector;
   void operator()(ADvector& fg, const ADvector& vars) {
-    // TODO: implement MPC
-    // `fg` a vector of the cost constraints, `vars` is a vector of variable values (state & actuators)
-    // NOTE: You'll probably go back and forth between this function and
-    // the Solver function below.
 
     fg[0] = 0; //Cost
 
+    //Mostly copy-paste from lectures and/or the QA-video
     //Reference State Cost
-    // TODO: Define the cost realated to  the reference state and anything
-    // you think may be beneficial
 
     for(int i=0; i<N; i++){
-      fg[0] += 2000 *CppAD::pow(vars[cte_start + i] - ref_cte,2)
-            +  2000 *CppAD::pow(vars[epsi_start + i] - ref_epsi,2)
-            +  CppAD::pow(vars[v_start + i] - ref_v, 2);
+      fg[0] += mpc_params[1] *CppAD::pow(vars[cte_start + i] - ref_cte,2)
+            +  mpc_params[2] *CppAD::pow(vars[epsi_start + i] - ref_epsi,2)
+            +  mpc_params[3] *CppAD::pow(vars[v_start + i] - mpc_params[0], 2);
     }
     for (int i = 0; i<N-1; i++){
-      fg[0] += 5*CppAD::pow(vars[delta_start + i],2)
-            +  5*CppAD::pow(vars[a_start + i], 2);
+      fg[0] += mpc_params[4] *CppAD::pow(vars[delta_start + i],2)
+            +  mpc_params[5] *CppAD::pow(vars[a_start + i], 2);
     }
     for(int i=0;i<N-2;i++){
-      fg[0] += 200*CppAD::pow(vars[delta_start + i + 1] - vars[delta_start+i],2)
-            +  10*CppAD::pow(vars[a_start + i + 1] - vars[a_start + i],2);
+      fg[0] += mpc_params[6] *CppAD::pow(vars[delta_start + i + 1] - vars[delta_start+i],2)
+            +  mpc_params[7] *CppAD::pow(vars[a_start + i + 1] - vars[a_start + i],2);
     }
 
     //todo setup constraint
@@ -117,7 +142,10 @@ class FG_eval {
 //
 // MPC class definition implementation.
 //
-MPC::MPC() {}
+MPC::MPC() {
+  best_speed=0;
+  counter=0;
+}
 MPC::~MPC() {}
 
 vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
@@ -132,13 +160,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   double cte = state[4];
   double epsi = state[5];
   
-  // TODO: Set the number of model variables (includes both states and inputs).
-  // For example: If the state is a 4 element vector, the actuators is a 2
-  // element vector and there are 10 timesteps. The number of variables is:
-  //
-  // 4 * 10 + 2 * 9
   size_t n_vars = N * 6 + (N-1) *2;
-  // TODO: Set the number of constraints
   size_t n_constraints = N*6;
 
   // Initial value of the independent variables.
@@ -150,17 +172,15 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
 
   Dvector vars_lowerbound(n_vars);
   Dvector vars_upperbound(n_vars);
-  // TODO: Set lower and upper limits for variables.
   //set all non-actuators
   for (int i = 0; i < delta_start; i++) {
     vars_lowerbound[i] = -1.0e19;
-    vars_upperbound[i] = 1.0e19;
+    vars_upperbound[i] =  1.0e19;
   }
   //s
   for (int i = delta_start; i < a_start; i++) {
     vars_lowerbound[i] = -0.436332*Lf;
-    vars_upperbound[i] = 0.436332*Lf;  
-
+    vars_upperbound[i] =  0.436332*Lf;  
   }
   for (int i = a_start; i < n_vars; i++) {
     vars_lowerbound[i] = -1.0;
@@ -222,7 +242,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
 
   // Cost
   auto cost = solution.obj_value;
-  std::cout << "Cost " << cost << std::endl;
+  //std::cout << "Cost " << cost << std::endl;
 
   // TODO: Return the first actuator values. The variables can be accessed with
   // `solution.x[i]`.
@@ -242,3 +262,73 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   return result;
 }
 
+bool MPC::twiddle(double speed,int x, int y, double cte){ 
+    /*
+    * This function will execute the Twiddle. 
+    * 
+    * This will be a bit different than in the pid.
+    * each time we only go 1 lap around, we will then give the score as avrage speed.
+    * we will thus only care about the speed, the cte is not directly important,
+    * But if the cte increase too much, we will go of track anyway.
+    * 
+    */
+  total_speed += speed;
+  if(speed > max_speed){
+    max_speed = speed;
+  }
+  counter++;
+  bool reset = false;
+  if (fabs(cte) > 3 || (counter > 50 && speed < 5)){
+    cout << "outside or stuck (cte=" << cte << " counter=" << counter << " speed=" << speed << "), so do a reset and";
+    total_speed=0;
+    reset = true;
+  }
+  if(reset || (x<0 && x>-30) && y>0 ){
+    //here we do the twiddle
+    double speed_score = (total_speed/counter + max_speed)/2 ; //Todo, check if better than just using averag speed
+    if (speed_score > best_speed ){
+      cout << endl << "---------------------------------------------------------" << endl <<
+              " - - - NEW BEST: " <<speed_score << " mph when setting param#" <<
+              parameterNo << " to " << mpc_params[parameterNo] << endl << 
+              "---------------------------------------------------------" << endl;
+      best_speed = speed_score;
+      twiddleDP[parameterNo] *= 1.1;
+      parameterNo = (parameterNo+1) % twiddleDP.size();
+      mpc_params[parameterNo] += twiddleDP[parameterNo];
+      twiddleCheckNeg = true;
+      cout << "Now start twiddle the next parameter #: " << parameterNo  << endl;
+    }else{
+      if(!reset) cout << "The average speed " << speed_score <<" in less than " <<best_speed << ", so let's" ;
+      if(twiddleCheckNeg){
+          cout << " try negative may" << endl;
+          mpc_params[parameterNo] -= 2*twiddleDP[parameterNo];
+          twiddleCheckNeg = false;
+      }else{
+          cout << " try lower DP for parameter "  << parameterNo;
+          mpc_params[parameterNo] += twiddleDP[parameterNo];  
+          twiddleDP[parameterNo] *= 0.9;    
+          parameterNo = (parameterNo+1) % twiddleDP.size();
+          mpc_params[parameterNo] += twiddleDP[parameterNo];
+          twiddleCheckNeg = true;
+          cout << ", the next parameter #:" << parameterNo  << endl;
+      }
+    }
+    // std::cout << std::fixed;
+    // std::cout << std::setprecision(10);
+    cout << "------------ \t|ref_v\t|cte\t|epsi\t|speed\t|delta\t|accel\t|de-d\t|acc-diff" << endl;
+    cout << "current PID: ";
+    for(auto &k:mpc_params){
+    cout << "\t|" << k ;
+    }
+    cout << endl << "current DP : ";
+    for(auto &k:twiddleDP){
+    cout << "\t|"<< k ;
+    }
+    cout << endl << endl;
+    counter = 0;
+    total_speed = 0;
+    max_speed=0;
+    return true;
+  } 
+  return false;
+}

@@ -15,6 +15,7 @@ using json = nlohmann::json;
 //set this to add a latency in the system
 double latency_s = 0.1;
 
+
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
@@ -75,13 +76,16 @@ int main() {
   MPC mpc;
   double old_v=0;
 
-  h.onMessage([&mpc, &old_v](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+
+  bool do_twiddle = true;
+
+  h.onMessage([&mpc, &old_v, &do_twiddle](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     string sdata = string(data).substr(0, length);
-    cout << sdata << endl;
+    //cout << sdata << endl;
     if (sdata.size() > 2 && sdata[0] == '4' && sdata[1] == '2') {
       string s = hasData(sdata);
       if (s != "") {
@@ -96,7 +100,7 @@ int main() {
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
           double Lf=2.67;
-
+          //cout << px << ":" << py << endl;
           /*
           * TODO: Calculate steering angle and throttle using MPC.
           *
@@ -127,31 +131,21 @@ int main() {
           double throttle_value = j[1]["throttle"];// almost accelration
 
           Eigen::VectorXd state(6);
+          // The lectures mentioned that throttle_value shoulh be good enough 
+          // but after some tests I feel that this works best.
           double accelration=((v-old_v)+throttle_value*latency_s)/2;
-         
-          double v_latency = v+accelration; 
-          cout << accelration << " = " << (v-old_v) << " + " << throttle_value*latency_s << " /2" <<endl;
+          double v_t1 = v+accelration; 
           old_v=v;
-          double psi_latency = ((v_latency)/Lf)* -steer_value * (latency_s); //change in psi
-          double x_latency = ((v_latency+v)/2)*cos(psi_latency/2) * (latency_s); //
-          double y_latency = ((v_latency+v)/2)*sin(psi_latency/2) * (latency_s); //
-          double cte_latency = cte + ((v_latency+v)/2) * sin(psi_latency/2)*(latency_s);
-          double epsi_latncy = epsi + ((v_latency)/Lf)* -steer_value * (latency_s);
-          state << x_latency, y_latency, psi_latency, 
-                    v_latency, cte_latency, epsi;
+          double psi_t1 = (v_t1 / Lf) * -steer_value * (latency_s); //change in psi
+          double x_t1 = ((v_t1+v) / 2) * cos(psi_t1/2) * (latency_s); // due to a, v will be different at t and t+1, so average ((v_latency+v)/2) should be more accurate
+          double y_t1 = ((v_t1+v) / 2) * sin(psi_t1/2) * (latency_s); 
+          double cte_t1 = cte + ((v_t1+v) / 2) * sin(psi_t1/2) * (latency_s);
+          double epsi_t1 = epsi + (v_t1 / Lf) * -steer_value * (latency_s);
+          state << x_t1, y_t1, psi_t1, 
+                    v_t1, cte_t1, epsi;
 
           // calculate steering angle and throttle
           auto vars = mpc.Solve(state,coeffs);
-
-          //vector<double> next_x_vals;
-         // vector<double> next_y_vals;
-          
-
-          
-       //   vector<double> mpc_x_vals;
-        //  vector<double> mpc_y_vals;
-
-          
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
@@ -190,8 +184,15 @@ int main() {
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
-
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
+
+          //Twiddle to get good parameters (Dont work with the standard simulator!)
+          if(do_twiddle){
+            if(mpc.twiddle(v,px, py, cte)){
+              msg = "42[\"reset\",{}]";
+            }
+          }
+
           //std::cout << msg << std::endl;
           // Latency
           // The purpose is to mimic real driving conditions where
@@ -228,7 +229,7 @@ int main() {
   });
 
   h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
-    std::cout << "Connected!!!" << std::endl;
+    //std::cout << "Connected!!!" << std::endl; //This is annoying if using reset
   });
 
   h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code,
