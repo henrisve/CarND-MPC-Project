@@ -75,11 +75,11 @@ int main() {
   // MPC is initialized here!
   MPC mpc;
   double old_v=0;
-
+  double timeScale = 3; //Makes the simulator run 3 times faster (Faster than this make us loose time)
 
   bool do_twiddle = true;
 
-  h.onMessage([&mpc, &old_v, &do_twiddle](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&mpc, &old_v, &do_twiddle, &timeScale](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -92,6 +92,7 @@ int main() {
         auto j = json::parse(s);
         string event = j[0].get<string>();
         if (event == "telemetry") {
+          auto start_time = std::chrono::high_resolution_clock::now();
           // j[1] is the data JSON object
           vector<double> ptsx = j[1]["ptsx"];
           vector<double> ptsy = j[1]["ptsy"];
@@ -189,7 +190,11 @@ int main() {
           //Twiddle to get good parameters (Dont work with the standard simulator!)
           if(do_twiddle){
             if(mpc.twiddle(v,px, py, cte)){
-              msg = "42[\"reset\",{}]";
+              json msgJson2;
+              //timeScale += 0.25;
+              cout << "using a timescale of " << timeScale << " ############################ " << endl;
+              msgJson2["timeScale"] = timeScale;
+              msg = "42[\"reset\"," + msgJson2.dump() + "]";
             }
           }
 
@@ -203,7 +208,15 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          this_thread::sleep_for(chrono::milliseconds(int(latency_s*1000)));
+          
+
+          auto end_time = std::chrono::high_resolution_clock::now();
+          auto time_to_process_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+          if(timeScale==1) time_to_process_ms = 0; // only do this when running faster, don't know if we're allowed to reduce this
+                                                   // even if that would make more sense as people with faster pc can get better result.
+ 
+          //cout << "time to wait: " << int((latency_s*1000-time_to_process_ms)/timeScale) << " = " << int((latency_s*1000-time_to_process_ms)) <<  " timescale: " << timeScale << " process time: " << time_to_process_ms << endl;
+          this_thread::sleep_for(chrono::milliseconds(int((latency_s*1000-time_to_process_ms)/timeScale)));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {

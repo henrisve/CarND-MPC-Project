@@ -277,6 +277,10 @@ bool MPC::twiddle(double speed,int x, int y, double cte){
     max_speed = speed;
   }
   counter++;
+  //double dist = sqrt(pow(x-old_x,2)+pow(y-old_y,2));
+ // old_x=x;
+ // old_y=y;
+  //cout << "distance  " << dist << endl;
   bool reset = false;
   if (fabs(cte) > 3 || (counter > 50 && speed < 5)){
     cout << "outside or stuck (cte=" << cte << " counter=" << counter << " speed=" << speed << "), so do a reset and";

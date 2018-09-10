@@ -22,6 +22,8 @@ class MPC {
   double max_speed=0;
   int parameterNo = 0;
   bool twiddleCheckNeg = true;
+  int old_x=0;
+  int old_y=0;
   //std::vector<double> mpc_params;
   //std::vector<double> twiddleDP;
 };
