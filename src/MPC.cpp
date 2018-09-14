@@ -37,12 +37,12 @@ double ref_epsi = 0;
 std::vector<double> mpc_params ={
   109.199,//107.054, //ref_v
   2000.29, //cte error
-  2105.37,//2087.38, //epsi error
+  1573.93,//2105.37,//2087.38, //epsi error
   1.06295,//1.01897, //speed error
-  5.9, //delta  ??
-  4.97048, //acceleration
-  167.7,//218.9, //delta diff
-  9.57787,//acceleration diff
+  6.7453,//5.9, //delta  ??
+  2.60603,//4.97048, //acceleration
+  386.957,//167.7,//218.9, //delta diff
+  21.8939,//9.57787,//acceleration diff
   9, // N
   0.0875132}; //dt
 
@@ -357,6 +357,9 @@ bool MPC::twiddle(double speed,int x, int y, double cte){
           mpc_params[parameterNo] += twiddleDP[parameterNo];  
           //here2
           twiddleDP[parameterNo]  = floor(twiddleDP[parameterNo]*0.9*pow(10,twiddleDecimals[parameterNo]))/pow(10,twiddleDecimals[parameterNo]);
+          if twiddleDP[parameterNo] < 1/pow(10,twiddleDecimals[parameterNo]){
+            twiddleDP[parameterNo] = 1/pow(10,twiddleDecimals[parameterNo]){
+          }
           //Here  
           parameterNo = (parameterNo+1) % twiddleDP.size();
           twiddleCheckNeg = true;
