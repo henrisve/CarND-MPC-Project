@@ -40,7 +40,7 @@ To optimize the parameters, I could just sit and try until it's better, but that
 or in this repo, buildlinux.zip (only linux version).
 Beside the reset I added the possibility to use it in a headless version (by using -batchmode) that could run about 3 times faster (faster than this and the latency in running the mpc code was too long).
 I put the algorithm to only optimize for speed, and if the cte went above 3, it would reset and get 0 points. (cte = 3 is about just before the curb, so it could go on the paint).
-This resulted in an average speed of about 65 and a top speed of almost 95.
+This resulted in an average speed of about 75 and a top speed of almost 105.
 
 I used twiddle for all the parameters, including weights and N/dt.
 
