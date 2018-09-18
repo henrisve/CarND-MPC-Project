@@ -28,7 +28,7 @@ to do this we can first use the equation above to calculate positions, but we al
           double psi_t1 = (v_t1 / Lf) * -steer_value * (latency_s); 
           double x_t1 = average_v * cos(psi_t1/2) * (latency_s);
           double y_t1 = average_v * sin(psi_t1/2) * (latency_s); 
-          double cte_t1 = cte + average_v * sin(psi_t1/2) * (latency_s)
+          double cte_t1 = cte + average_v * sin(psi_t1/2) * (latency_s);
           double epsi_t1 = epsi + (v_t1 / Lf) * -steer_value * (latency_s); 
           state << x_t1, y_t1, psi_t1, 
                     v_t1, cte_t1, epsi_t1;
