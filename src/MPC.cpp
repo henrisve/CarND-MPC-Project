@@ -104,11 +104,11 @@ class FG_eval {
     fg[0] = 0; //Cost
 
 
-    const AD<double> x = vars[v_start]*N*dt;
-    const AD<double> last_y = coeffs[0]+
-                    coeffs[1]*x+
-                    coeffs[2]*x*x+
-                    coeffs[3]*x*x*x;
+    AD<double> x = vars[v_start]*N*dt;
+    AD<double> last_y = coeffs[0]+
+                        coeffs[1]*x+
+                        coeffs[2]*x*x+
+                        coeffs[3]*x*x*x;
     // last_y gives us how far in y direction we need to go.
 
     //Mostly copy-paste from lectures and/or the QA-video
@@ -277,7 +277,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   options += "Sparse  true        reverse\n";
   // NOTE: Currently the solver has a maximum time limit of 0.5 seconds.
   // Change this as you see fit.
-  options += "Numeric max_cpu_time          1.5\n";
+  options += "Numeric max_cpu_time          0.5\n";
 
   // place to return solution
   CppAD::ipopt::solve_result<Dvector> solution;
