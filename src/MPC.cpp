@@ -29,58 +29,54 @@ double ref_epsi = 0;
   * 1 cte error
   * 2 epsi error
   * 3 speed error
-  * 4 delta  ??
+  * 4 delta  
   * 5 acceleration
   * 6 delta diff
   * 7 acceleration diff
+  * 8 N
+  * 9 dt
+  * 10 cte in curves
   */
 std::vector<double> mpc_params ={
-  109.199,//107.054, //ref_v
-  2000.29, //cte error
-  1573.93,//2105.37,//2087.38, //epsi error
-  1.06295,//1.01897, //speed error
-  6.7453,//5.9, //delta  ??
-  2.60603,//4.97048, //acceleration
-  386.957,//167.7,//218.9, //delta diff
-  21.8939,//9.57787,//acceleration diff
+  100,//118.667,//109.199,//107.054, //ref_v //if it works well, try to increase this!
+  2500.29, //cte error
+  1471,//1573.93,//2105.37,//2087.38, //epsi error
+  2,//1.01897, //speed error
+  8,//5.9, //delta  
+  0,//2.60603,//4.97048, //acceleration
+  186.957,//167.7,//218.9, //delta diff
+  29.8539,//21.8939,//9.57787,//acceleration diff
   9, // N
-  0.0875132}; //dt
+  0.088,//dt
+  0.055};//0.055}; 
+//current PID: 	|118.667	|2205.05	|2481.32	|2.06295	|8.3395	|-0.70617	|386.957	|29.8539	|11	|0.0807932	|0.026	|467.2
 
 std::vector<double> twiddleDP = {
-  20, //ref_v
-  1000, //cte error
-  1000, //epsi error
+  5, //ref_v
+  100, //cte error
+  100, //epsi error
   1, //speed error
-  3, //delta  ??
+  3, //delta  
   2, //acceleration
-  100, //delta diff
+  50, //delta diff
   4, //acceleration diff
   5,
-  0.05}; /* 
-  0.5, //ref_v
-  10, //cte error
-  10, //epsi error
-  0.01, //speed error
-  0.05, //delta  ??
-  0.05, //acceleration
-  1, //delta diff
-  0.05, //acceleration diff
-  1,
-  0.01};  */
-//|0.00569287     |0.0762186      |0.0623607      |6.92896e-05    |0.00023192     |0.000283458    |0.00566915     |0.000283458    |0.00566915     |5.66915e-05
+  0.05,
+  0.001}; 
 
 //This vector restricts decimals for twiddle, 
 std::vector<double> twiddleDecimals = {
-  3, //ref_v
-  2, //cte error
-  2, //epsi error
-  6, //speed error
-  4, //delta  ??
-  7, //acceleration
+  2, //ref_v
+  0, //cte error
+  0, //epsi error
+  4, //speed error
+  4, //delta 
+  2, //acceleration
   3, //delta diff
   5, //acceleration diff
   0,
-  5};  
+  5,
+  4};  
 
 
 size_t N = int(mpc_params[7]);; //TODO: is it possible to move these into mpc-params?
@@ -107,13 +103,24 @@ class FG_eval {
 
     fg[0] = 0; //Cost
 
+
+    const AD<double> x = vars[v_start]*N*dt;
+    const AD<double> last_y = coeffs[0]+
+                    coeffs[1]*x+
+                    coeffs[2]*x*x+
+                    coeffs[3]*x*x*x;
+    // last_y gives us how far in y direction we need to go.
+
     //Mostly copy-paste from lectures and/or the QA-video
     //Reference State Cost
 
     for(int i=0; i<N; i++){
-      fg[0] += mpc_params[1] *CppAD::pow(vars[cte_start + i] - ref_cte,2)
-            +  mpc_params[2] *CppAD::pow(vars[epsi_start + i] - ref_epsi,2)
+      // last_y will here move the points thowards the inner part of the curve
+      fg[0] += mpc_params[1] *CppAD::pow(vars[cte_start + i] + mpc_params[10]*last_y,2)
+            +  mpc_params[2] *CppAD::pow(vars[epsi_start + i],2)
             +  mpc_params[3] *CppAD::pow(vars[v_start + i] - mpc_params[0], 2);
+
+            
     }
     for (int i = 0; i<N-1; i++){
       fg[0] += mpc_params[4] *CppAD::pow(vars[delta_start + i],2)
@@ -270,7 +277,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   options += "Sparse  true        reverse\n";
   // NOTE: Currently the solver has a maximum time limit of 0.5 seconds.
   // Change this as you see fit.
-  options += "Numeric max_cpu_time          0.5\n";
+  options += "Numeric max_cpu_time          1.5\n";
 
   // place to return solution
   CppAD::ipopt::solve_result<Dvector> solution;
@@ -332,21 +339,27 @@ bool MPC::twiddle(double speed,int x, int y, double cte){
   }
   if(reset || (x<0 && x>-30) && y>0 ){
     //here we do the twiddle
-    double speed_score = (total_speed/counter + max_speed)/2 ; //Todo, check if better than just using averag speed
+    double speed_score = (total_speed/counter + max_speed)/2;
     if (speed_score > best_speed ){
+      if(best_times < 1){
+        cout << "This was the best so far, but to not make a winner just for luck, let's try again!" << endl;
+        best_times++;
+      }else{
       cout << endl <<  endl <<"---------------------------------------------------------" << endl <<
               " - - - NEW BEST: " <<speed_score << " mph when setting param#" <<
               parameterNo << " to " << mpc_params[parameterNo] << endl << "Average speed: " << total_speed/counter << ". Max speed: " << max_speed << endl << 
               "---------------------------------------------------------" << endl << endl;
       best_speed = speed_score;
       twiddleDP[parameterNo] = ceil(twiddleDP[parameterNo]*1.1*pow(10,twiddleDecimals[parameterNo]))/pow(10,twiddleDecimals[parameterNo]);
-      //Here
       parameterNo = (parameterNo+1) % twiddleDP.size();
       mpc_params[parameterNo] += twiddleDP[parameterNo];
-      //here2
       twiddleCheckNeg = true;
       cout << "Now start twiddle the next parameter #: " << parameterNo  << endl;
+        best_times=0;
+      }
+
     }else{
+      best_times=0;
       if(!reset) cout << "The average speed " << speed_score <<" in less than " <<best_speed << ", so let's" ;
       if(twiddleCheckNeg){
           cout << " try negative may" << endl;
@@ -355,21 +368,19 @@ bool MPC::twiddle(double speed,int x, int y, double cte){
       }else{
           cout << " try lower DP for parameter "  << parameterNo;
           mpc_params[parameterNo] += twiddleDP[parameterNo];  
-          //here2
           twiddleDP[parameterNo]  = floor(twiddleDP[parameterNo]*0.9*pow(10,twiddleDecimals[parameterNo]))/pow(10,twiddleDecimals[parameterNo]);
-          if twiddleDP[parameterNo] < 1/pow(10,twiddleDecimals[parameterNo]){
-            twiddleDP[parameterNo] = 1/pow(10,twiddleDecimals[parameterNo]){
+          if(twiddleDP[parameterNo] < 1/pow(10,twiddleDecimals[parameterNo])){
+            twiddleDP[parameterNo] = 1/pow(10,twiddleDecimals[parameterNo]);
           }
-          //Here  
           parameterNo = (parameterNo+1) % twiddleDP.size();
           twiddleCheckNeg = true;
           cout << ", the next parameter #:" << parameterNo  << endl;
           mpc_params[parameterNo] += twiddleDP[parameterNo]; //Note, this is the next parameher
-          //here2
       }
     }
-    // std::cout << std::fixed;
-    // std::cout << std::setprecision(10);
+    //std::cout << std::fixed;
+    //std::cout << std::setprecision(2);
+    //Todo fix better output
     cout << "------------ \t|ref_v\t|cte\t|epsi\t|speed\t|delta\t|accel\t|de-d\t|acc-diff\t|N\t|dt" << endl;
     cout << "current PID: ";
     for(auto &k:mpc_params){

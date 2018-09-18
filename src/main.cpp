@@ -13,11 +13,11 @@
 using json = nlohmann::json;
 
 //set this to add a latency in the system
-double latency_s = 0.1;
+double latency_s = 0.1;  
 double timeScale = 1; //Makes the simulator run x times faster, 1 is normal speed
+bool do_twiddle = false;
 
-bool do_twiddle = true;
-bool firstTime= timeScale!=1; // only if we use timescale
+
 
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
@@ -78,9 +78,12 @@ int main() {
   // MPC is initialized here!
   MPC mpc;
   double old_v=0;
+  
 
+  bool firstTime= timeScale!=1; // only if we use timescale
 
-  h.onMessage([&mpc, &old_v, &do_twiddle, &timeScale,&firstTime](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+//&do_twiddle, &timeScale
+  h.onMessage([&mpc, &old_v,&firstTime](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -133,18 +136,21 @@ int main() {
           double throttle_value = j[1]["throttle"];// almost accelration
 
           Eigen::VectorXd state(6);
-          // The lectures mentioned that throttle_value shoulh be good enough 
-          // but after some tests I feel that this works best.
-          double accelration=((v-old_v)+throttle_value*latency_s)/2;
+          // The lectures mentioned that throttle_value should be good enough 
+          // Don't know if this is better, should try it a bit!
+          double accelration1 =(v-old_v);
+          double accelration2 =throttle_value*latency_s;
+          double accelration = accelration2;//(accelration1+accelration2)/2 ;
           double v_t1 = v+accelration; 
           old_v=v;
+          double average_v = ((v_t1+v) / 2);
           double psi_t1 = (v_t1 / Lf) * -steer_value * (latency_s); //change in psi
-          double x_t1 = ((v_t1+v) / 2) * cos(psi_t1/2) * (latency_s); // due to a, v will be different at t and t+1, so average ((v_latency+v)/2) should be more accurate
-          double y_t1 = ((v_t1+v) / 2) * sin(psi_t1/2) * (latency_s); 
-          double cte_t1 = cte + ((v_t1+v) / 2) * sin(psi_t1/2) * (latency_s);
-          double epsi_t1 = epsi + (v_t1 / Lf) * -steer_value * (latency_s);
+          double x_t1 = average_v * cos(psi_t1/2) * (latency_s); // due to a, v will be different at t and t+1, so average ((v_latency+v)/2) should be more accurate
+          double y_t1 = average_v * sin(psi_t1/2) * (latency_s); 
+          double cte_t1 = cte + average_v * sin(psi_t1/2) * (latency_s); // Lesson 18:10 Errors
+          double epsi_t1 = epsi + (v_t1 / Lf) * -steer_value * (latency_s); 
           state << x_t1, y_t1, psi_t1, 
-                    v_t1, cte_t1, epsi;
+                    v_t1, cte_t1, epsi_t1;
 
           // calculate steering angle and throttle
           auto vars = mpc.Solve(state,coeffs);
@@ -212,12 +218,16 @@ int main() {
 
           auto end_time = std::chrono::high_resolution_clock::now();
           auto time_to_process_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-          if(timeScale==1) time_to_process_ms = 0; // only do this when running faster, don't know if we're allowed to reduce this
-                                                   // even if that would make more sense as people with faster pc can get better result.
- 
+          //cout << time_to_process_ms << "ms" <<  endl;
+          if(timeScale==1) time_to_process_ms = 0; // only do this when running faster
+          //The latency is reduced when running simulation faster, as when going double speed 50 ms = 100 ms etc etc.
+          // And also reduce the "time to process" due to this is more significant when going fast.
+          
           //cout << "time to wait: " << int((latency_s*1000-time_to_process_ms)/timeScale) << " = " << int((latency_s*1000-time_to_process_ms)) <<  " timescale: " << timeScale << " process time: " << time_to_process_ms << endl;
-          this_thread::sleep_for(chrono::milliseconds(int((latency_s*1000-time_to_process_ms)/timeScale)));
+          int delay_time = int((latency_s*1000-time_to_process_ms)/timeScale);
+          this_thread::sleep_for(chrono::milliseconds(delay_time)); //This is 100 ms when timescale is 1
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+          
         }
       } else {
         // Manual driving

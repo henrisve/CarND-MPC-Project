@@ -16,14 +16,15 @@ class MPC {
   // Return the first actuatotions.
   vector<double> Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs);
   bool twiddle(double speed,int x, int y, double cte);
-  double best_speed;
-  int counter;
+  double best_speed=0;
+  int counter=0;
   double total_speed=0;
   double max_speed=0;
   int parameterNo = 0;
   bool twiddleCheckNeg = true;
   int old_x=0;
   int old_y=0;
+  int best_times=0;
   //std::vector<double> mpc_params;
   //std::vector<double> twiddleDP;
 };
